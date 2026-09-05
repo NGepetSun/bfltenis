@@ -9,24 +9,16 @@ function liveEditors(s){
  const live=[...(s.rounds||[]).flatMap(r=>r.matches||[]),s.thirdPlace].filter(x=>x&&x.status==="live");
  const el=$("#liveEditors");if(!el)return;
  if(!live.length){el.innerHTML='<div class="empty">Belum ada match live.</div>';return}
+ const stat=(url,youtube)=>url?"🟢 LIVE terdeteksi":(youtube?"⏳ Menunggu live channel...":"⚪ Belum ada link YouTube di Player List");
  el.innerHTML=live.map(m=>{
-   const p1=m.liveChannel1||m.liveYoutube1||"",p2=m.liveChannel2||m.liveYoutube2||"",safe=String(m.id).replace(/[^a-zA-Z0-9_-]/g,"");
-   const n1=name(m.players?.[0])||"Pemain 1",n2=name(m.players?.[1])||"Pemain 2";
-   return `<div class="admin-live-card"><strong>🔴 ${m.players.map(name).join(" vs ")}</strong>
-   <small>${m.id} • ${esc(n1)}: ${m.liveYoutube1?"LIVE TERDETEKSI":"BELUM"} • ${esc(n2)}: ${m.liveYoutube2?"LIVE TERDETEKSI":"BELUM"}</small>
-   <div class="live-editor">
-   <input id="live1-${safe}" value="${escAttr(p1)}" placeholder="Stream ${escAttr(n1)} — @channel YouTube">
-   <input id="live2-${safe}" value="${escAttr(p2)}" placeholder="Stream ${escAttr(n2)} — @channel YouTube">
-   <button data-live="${m.id}" data-safe="${safe}">CARI & SIMPAN LIVE</button>
-   </div>
-   <small>Contoh: @paddang — sistem akan mencari siaran LIVE channel tersebut.</small></div>`
+   const p1=m.players?.[0],p2=m.players?.[1],n1=name(p1),n2=name(p2);
+   return `<div class="admin-live-card"><strong>🔴 ${esc(n1)} vs ${esc(n2)}</strong>
+   <small>${m.id} • Live diambil otomatis dari link YouTube masing-masing player (atur/ubah di PLAYER LIST di atas).</small>
+   <div class="live-status-row" style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;font-size:10px">
+     <span>${esc(n1)}: ${stat(m.liveYoutube1,p1?.youtube)}</span>
+     <span>${esc(n2)}: ${stat(m.liveYoutube2,p2?.youtube)}</span>
+   </div></div>`
  }).join("");
- el.querySelectorAll("[data-live]").forEach(btn=>btn.onclick=async()=>{
-   const safe=btn.dataset.safe,a=$("#live1-"+safe),c=$("#live2-"+safe);
-   try{btn.disabled=true;btn.textContent="MENCARI LIVE...";await api("set-live",{matchId:btn.dataset.live,youtube1:a.value.trim(),youtube2:c.value.trim()});$("#adminMsg").textContent="Live stream berhasil ditemukan dan disimpan.";load(true)}
-   catch(e){$("#adminMsg").textContent=e.message}
-   finally{btn.disabled=false;btn.textContent="CARI & SIMPAN LIVE"}
- })
 }
 window.addEventListener("resize",()=>{const c=$("#adminBracket");if(c)drawConnectors(c)});
 async function load(forceLive=false){

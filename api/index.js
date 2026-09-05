@@ -1,1 +1,33 @@
-
+const crypto=require("crypto");const {createClient}=require("redis");
+const KEY="bfl:tennis:hp:v1",COOKIE="bfl_admin_session",MAX=43200;
+let clientPromise;
+function redis(){if(!clientPromise){const c=createClient({url:process.env.REDIS_URL});c.on("error",e=>console.error(e));clientPromise=c.connect().then(()=>c)}return clientPromise}
+function init(){return {status:"setup",players:[],rounds:[],thirdPlace:null,podium:{first:null,second:null,third:null}}}
+function pn(p){return typeof p==="string"?p:(p?.name||"TBD")}
+function norm(s){s=s||init();s.players=(s.players||[]).map(p=>typeof p==="string"?{name:p,youtube:""}:p);return s}
+async function get(){const c=await redis();const x=await c.get(KEY);return norm(x?JSON.parse(x):init())}
+async function save(s){const c=await redis();await c.set(KEY,JSON.stringify(s))}
+function cookieVal(req){const h=req.headers.cookie||"";const m=h.match(new RegExp("(^|; )"+COOKIE+"=([^;]+)"));return m?m[2]:null}
+function sign(v){return crypto.createHmac("sha256",process.env.SESSION_SECRET||"change-me").update(v).digest("hex")}
+function isAdmin(req){const v=cookieVal(req);if(!v)return false;const [u,exp,sig]=Buffer.from(v,"base64url").toString().split(".");return u&&exp&&sig&&Number(exp)>Date.now()/1000&&crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(sign(u+"."+exp)))}
+function setCookie(res,v){res.setHeader("Set-Cookie",COOKIE+"="+v+"; Path=/; HttpOnly; SameSite=Strict; Max-Age="+MAX+(process.env.NODE_ENV==="production"?"; Secure":""))}
+function json(res,status,obj){res.statusCode=status;res.setHeader("Content-Type","application/json; charset=utf-8");res.end(JSON.stringify(obj))}
+function body(req){if(req.body&&typeof req.body==="object")return Promise.resolve(req.body);return new Promise(resolve=>{let x="";req.on("data",c=>x+=c);req.on("end",()=>{try{resolve(x?JSON.parse(x):{})}catch{resolve({})}})})}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function build(players){let ps=shuffle(players.map(p=>({...p})));let n=1;while(n<ps.length)n*=2;while(ps.length<n)ps.push(null);let matches=[];for(let i=0;i<n;i+=2)matches.push({id:"r1m"+(i/2+1),players:[ps[i],ps[i+1]],winner:null,status:ps[i]&&ps[i+1]?"live":"bye"});const rounds=[{name:"ROUND 1",matches}];let count=n/2,ri=2;while(count>=2){let ms=[];for(let i=0;i<count;i++)ms.push({id:"r"+ri+"m"+(i+1),players:[null,null],winner:null,status:"waiting"});rounds.push({name:count===2?"FINAL":("ROUND "+ri),matches:ms});count/=2;ri++}return {rounds}}
+function same(a,b){return pn(a)!=="TBD"&&pn(a)===pn(b)}
+function advance(s,roundIndex,matchIndex,w){const r=s.rounds[roundIndex],m=r.matches[matchIndex];m.winner=w;m.status="done";const loser=same(m.players[0],w)?m.players[1]:m.players[0];if(roundIndex===s.rounds.length-1){s.podium.first=w;s.podium.second=loser;return}const next=s.rounds[roundIndex+1].matches[Math.floor(matchIndex/2)];const slot=matchIndex%2;next.players[slot]=w;if(next.players[0]&&next.players[1])next.status="live";if(loser&&roundIndex===s.rounds.length-2){/* final loser handled above */}}
+function maybeThird(s){if(s.rounds.length<2)return;if(!s.thirdPlace){const sf=s.rounds[s.rounds.length-2];if(sf.matches.length===2&&sf.matches.every(m=>m.winner)){const losers=sf.matches.map(m=>same(m.players[0],m.winner)?m.players[1]:m.players[0]);if(losers[0]&&losers[1])s.thirdPlace={id:"third",players:losers,winner:null,status:"live"}}}}
+async function handler(req,res){try{const action=(req.query&&req.query.action)||"state";if(action==="state"){const s=await get();return json(res,200,{...s,admin:isAdmin(req)})}
+if(action==="login"){const b=await body(req);if(req.method!=="POST")return json(res,405,{error:"POST only"});if(b.username!==process.env.ADMIN_USERNAME||b.password!==process.env.ADMIN_PASSWORD)return json(res,401,{error:"Username/password salah"});const exp=Math.floor(Date.now()/1000)+MAX,raw=b.username+"."+exp,sig=sign(raw);setCookie(res,Buffer.from(raw+"."+sig).toString("base64url"));return json(res,200,{ok:true})}
+if(!isAdmin(req))return json(res,401,{error:"Admin login diperlukan"});
+if(action==="logout"){setCookie(res,"; Max-Age=0");return json(res,200,{ok:true})}
+let s=await get(),b=await body(req);
+if(action==="register")return json(res,403,{error:"Public registration disabled"});
+if(action==="add-player"){if(s.status!=="setup")return json(res,400,{error:"Player hanya bisa ditambah sebelum bracket dimulai"});if(!b.name?.trim())return json(res,400,{error:"Nama player wajib"});if(s.players.some(p=>pn(p).toLowerCase()===b.name.trim().toLowerCase()))return json(res,400,{error:"Nama sudah ada"});s.players.push({name:b.name.trim(),youtube:b.youtube||""});await save(s);return json(res,200,{ok:true,state:s})}
+if(action==="update-player"){if(s.status!=="setup")return json(res,400,{error:"Edit player hanya sebelum bracket dimulai"});const i=Number(b.index);if(!s.players[i])return json(res,404,{error:"Player tidak ditemukan"});if(!b.name?.trim())return json(res,400,{error:"Nama wajib"});s.players[i]={name:b.name.trim(),youtube:b.youtube||""};await save(s);return json(res,200,{ok:true})}
+if(action==="start"){if(s.players.length<2)return json(res,400,{error:"Minimal 2 player"});if(s.status!=="setup")return json(res,400,{error:"Tournament sudah dimulai"});s=init();s.players=(await get()).players;s.rounds=build(s.players).rounds;s.status="live";for(let i=0;i<s.rounds[0].matches.length;i++){let m=s.rounds[0].matches[i];if(m.status==="bye"){const w=m.players.find(Boolean);m.winner=w;m.status="done";const next=s.rounds[1]?.matches[Math.floor(i/2)];if(next){next.players[i%2]=w;if(next.players[0]&&next.players[1])next.status="live"}}}await save(s);return json(res,200,{ok:true})}
+if(action==="winner"){if(s.status!=="live"&&s.status!=="completed")return json(res,400,{error:"Tournament belum dimulai"});let found=null;if(b.matchId==="third")found=s.thirdPlace;else for(const r of s.rounds)for(const m of r.matches)if(m.id===b.matchId)found=m;if(!found||found.status!=="live")return json(res,400,{error:"Match tidak live"});const w=found.players.find(p=>pn(p)===b.playerName);if(!w)return json(res,400,{error:"Player tidak ditemukan di match"});if(b.matchId==="third"){found.winner=w;s.podium.third=w;found.status="done"}else{let ri=s.rounds.findIndex(r=>r.matches.some(m=>m.id===found.id)),mi=s.rounds[ri].matches.findIndex(m=>m.id===found.id);advance(s,ri,mi,w)}maybeThird(s);if(s.podium.first&&s.podium.second&&s.podium.third)s.status="completed";await save(s);return json(res,200,{ok:true,state:s})}
+if(action==="reset"){await save(init());return json(res,200,{ok:true})}
+return json(res,404,{error:"Action tidak dikenal"})}catch(e){console.error(e);return json(res,500,{error:"Server error",detail:String(e.message||e)})}}
+module.exports=handler;

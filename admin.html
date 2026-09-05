@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BFL Tennis • Admin</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="bg"></div><div class="scan"></div>
+  <header class="top">
+    <div class="brand"><img src="/bfl-logo.png"><div><b>BFL TENNIS ADMIN</b><span>PRIVATE CONTROL PANEL</span></div></div>
+    <a class="admin-link" href="/">PUBLIC</a>
+  </header>
+  <main>
+    <section id="loginBox" class="glass admin-login">
+      <div class="live-pill"><i></i> ADMIN ACCESS</div>
+      <h1>CONTROL <em>PANEL</em></h1>
+      <form id="loginForm">
+        <input id="username" placeholder="Username" autocomplete="username" required>
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" required>
+        <button>LOGIN</button>
+      </form>
+      <p id="loginMsg" class="msg"></p>
+    </section>
+
+    <section id="panel" hidden>
+      <section class="glass section">
+        <div class="section-title"><h2>TOURNAMENT CONTROL</h2><button class="danger" id="logoutBtn">LOGOUT</button></div>
+        <div class="controls">
+          <button id="startBtn">START / RANDOMIZE BRACKET</button>
+          <button class="danger" id="resetBtn">RESET TOURNAMENT</button>
+        </div>
+        <p id="adminMsg" class="msg"></p>
+      </section>
+
+      <section class="glass section">
+        <div class="section-title"><h2>ADD PLAYER</h2><span>ADMIN ONLY</span></div>
+        <form id="addForm" class="player-form">
+          <input id="playerName" placeholder="Nama player" required>
+          <input id="playerYoutube" placeholder="Link YouTube (opsional)">
+          <button>ADD PLAYER</button>
+        </form>
+      </section>
+
+      <section class="glass section">
+        <div class="section-title"><h2>PLAYER LIST</h2><span id="count">0 PLAYER</span></div>
+        <div id="players" class="players"></div>
+      </section>
+
+      <section class="glass section">
+        <div class="section-title"><h2>CHOOSE WINNER</h2><span>KLIK NAMA PEMENANG</span></div>
+        <div id="adminBracket" class="bracket-wrap"></div>
+      </section>
+    </section>
+  </main>
+  <footer>ADMIN • BROTHER FOR LIFE</footer>
+  <script src="/admin.js"></script>
+</body>
+</html>

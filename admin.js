@@ -68,10 +68,26 @@ $("#confirmStartBtn").onclick=async()=>{
  try{await api("start",{order:previewOrder});$("#previewBox").hidden=true;previewOrder=null;$("#adminMsg").textContent="Bracket dimulai sesuai hasil preview.";load(true)}
  catch(e){$("#adminMsg").textContent=e.message}
 }
+let publicPreviewResizeTimer=null;
+function resizePublicPreview(){
+ try{
+  const f=$("#publicPreviewFrame");if(!f||f.hidden)return;
+  const doc=f.contentDocument||f.contentWindow.document;
+  const h=Math.max(doc.body.scrollHeight,doc.documentElement.scrollHeight);
+  if(h>0)f.style.height=(h+30)+"px";
+ }catch(e){}
+}
+window.resizePublicPreview=resizePublicPreview;
 $("#togglePublicPreview").onclick=()=>{
  const w=$("#publicPreviewWrap"),show=w.hidden;
  w.hidden=!show;$("#togglePublicPreview").textContent=show?"SEMBUNYIKAN":"TAMPILKAN";
- if(show)$("#publicPreviewFrame").src="/?t="+Date.now();
+ if(show){
+  $("#publicPreviewFrame").src="/?t="+Date.now();
+  clearInterval(publicPreviewResizeTimer);
+  publicPreviewResizeTimer=setInterval(resizePublicPreview,1500); // konten bracket/video dimuat via JS setelah load, jadi tinggi bisa berubah-ubah
+ }else{
+  clearInterval(publicPreviewResizeTimer);
+ }
 }
 $("#refreshPublicPreview").onclick=()=>{$("#publicPreviewFrame").src="/?t="+Date.now()};
 $("#resetBtn").onclick=async()=>{if(!confirm("RESET SEMUA DATA TURNAMEN?"))return;try{await api("reset");previewOrder=null;$("#previewBox").hidden=true;$("#adminMsg").textContent="Tournament di-reset.";load(true)}catch(e){$("#adminMsg").textContent=e.message}}

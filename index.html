@@ -3,53 +3,37 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>BFL Tennis Live</title>
+  <title>BFL Tennis • Live Bracket</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <div class="bg"></div><div class="scan"></div><div class="particles"></div>
   <header class="top">
-    <div class="brand"><img src="/bfl-logo.png"><div><b>BROTHER FOR LIFE</b><span>GTA V ROLEPLAY • TENNIS EVENT</span></div></div>
-    <a class="admin-link" href="/admin.html">ADMIN</a>
+    <a class="brand" href="/" aria-label="BFL Tennis home"><img src="/bfl-logo.png" alt="BFL"><div><b>BFL TENNIS</b><span>LIVE TOURNAMENT</span></div></a>
+    <div class="top-actions"><span id="topStatus" class="top-status">● OFFLINE</span><a class="admin-link" href="/admin.html">ADMIN</a></div>
   </header>
 
   <main>
-    <section class="hero glass">
-      <div>
-        <div class="live-pill"><i></i> LIVE TOURNAMENT</div>
-        <h1>BFL <em>TENNIS</em></h1>
-        <p>Fear rises, yet love, stay still</p>
-        <div class="hashtags">#BFLONTOP</div>
-      </div>
-      <img class="banner" src="/event-banner.jpg" alt="Brother For Life Tennis Event">
+    <section class="bracket-section glass section">
+      <div class="section-title hero-title"><div><span class="eyebrow">TOURNAMENT</span><h1>LIVE <em>BRACKET</em></h1></div><span id="updated">—</span></div>
+      <div id="bracket" class="bracket-wrap"><div class="empty">Menghubungkan ke turnamen...</div></div>
     </section>
 
-    <section class="info-grid">
+    <section class="live-section glass section">
+      <div class="section-title"><div><span class="eyebrow">WATCH NOW</span><h2>LIVE POV</h2></div><span id="statusText" class="status-badge">CONNECTING...</span></div>
+      <div id="court" class="court"><div class="empty">Belum ada POV live.</div></div>
+    </section>
+
+    <section class="compact-info">
       <div class="info glass"><small>PRIZE POOL</small><strong>Rp 1.000.000</strong></div>
-      <div class="info glass"><small>JUARA SATU</small><strong>Rp 500.000</strong></div>
-      <div class="info glass"><small>JUARA DUA</small><strong>Rp 300.000</strong></div>
-      <div class="info glass"><small>JUARA TIGA</small><strong>Rp 200.000</strong></div>
-      <div class="info glass"><small>TIME EVENT</small><strong>HABIS BADAI 20.00 WIB ++</strong></div>
-    </section>
-
-    <section class="glass section">
-      <div class="section-title"><h2>LIVE COURT</h2><span id="statusText">CONNECTING...</span></div>
-      <div id="court" class="court"><div class="empty">Belum ada pertandingan live.</div></div>
-    </section>
-
-    <section class="glass section">
-      <div class="section-title"><h2>TOURNAMENT BRACKET</h2><span id="updated">—</span></div>
-      <div id="bracket" class="bracket-wrap"></div>
+      <div class="info glass"><small>1ST</small><strong>Rp 500.000</strong></div>
+      <div class="info glass"><small>2ND</small><strong>Rp 300.000</strong></div>
+      <div class="info glass"><small>3RD</small><strong>Rp 200.000</strong></div>
     </section>
 
     <section class="glass section podium-section">
-      <div class="section-title"><h2>PODIUM</h2><span>PRIZE</span></div>
+      <div class="section-title"><h2>PODIUM</h2><span>FINAL RESULT</span></div>
       <div id="podium" class="podium"></div>
-    </section>
-
-    <section class="glass section rules">
-      <h2>EVENT STATUS</h2>
-      <p>Bracket dan hasil pertandingan diperbarui otomatis. Pengunjung hanya dapat melihat pertandingan; seluruh input pemain, YouTube, bracket, pemenang, dan reset dilakukan admin.</p>
     </section>
   </main>
   <footer>© BROTHER FOR LIFE • GTA V ROLEPLAY</footer>

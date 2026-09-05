@@ -49,15 +49,14 @@ function generatePreview(){
  const arr=players.slice();
  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}
  previewOrder=arr.map(name);
- let n=1;while(n<arr.length)n*=2;
- const numByes=n-arr.length,numFullMatches=n/2-numByes;
- const fullReals=arr.slice(0,numFullMatches*2),byeReals=arr.slice(numFullMatches*2);
- const padded=[];for(let i=0;i<fullReals.length;i+=2)padded.push(fullReals[i],fullReals[i+1]);for(const r of byeReals)padded.push(r,null);
- const pairs=[];for(let i=0;i<n;i+=2)pairs.push([padded[i],padded[i+1]]);
+
+ // Preview juga dinamis: tidak ada 10 slot BYE seperti bracket 32 slot.
+ const pairs=[];
+ for(let i=0;i<arr.length;i+=2)pairs.push([arr[i],arr[i+1]||null]);
  $("#previewList").innerHTML=pairs.map(pr=>{
    const a=pr[0]?name(pr[0]):null,b=pr[1]?name(pr[1]):null;
    if(a&&b)return `<div class="preview-pair"><span>${esc(a)}</span><b>VS</b><span>${esc(b)}</span></div>`;
-   return `<div class="preview-pair"><span>${esc(a||b)}</span><b>BYE</b><span class="tbd">langsung maju ronde ini</span></div>`;
+   return `<div class="preview-pair"><span>${esc(a||b)}</span><b>BYE</b><span class="tbd">otomatis WIN & maju</span></div>`;
  }).join("");
  $("#previewBox").hidden=false;
 }

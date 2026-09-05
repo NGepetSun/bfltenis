@@ -63,80 +63,14 @@ function build(players,order){
  }else{
    real=shuffle(players.map(p=>({...p})));
  }
-
- // Bracket dinamis: tidak dipaksa ke 2^n (16/32/64).
- // Setiap ronde hanya membuat match yang benar-benar diperlukan.
- const rounds=[];
- let currentCount=real.length;
- let ri=1;
-
- const firstMatches=[];
- for(let i=0;i<real.length;i+=2){
-   const a=real[i]||null,b=real[i+1]||null;
-   firstMatches.push({
-     id:"r1m"+(firstMatches.length+1),
-     players:[a,b],
-     winner:null,
-     status:a&&b?"live":"bye",
-     liveYoutube1:"",
-     liveYoutube2:""
-   });
- }
- rounds.push({name:"ROUND 1",matches:firstMatches});
-
- currentCount=Math.ceil(real.length/2);
- ri=2;
- while(currentCount>1){
-   const matchCount=Math.ceil(currentCount/2);
-   const ms=[];
-   for(let i=0;i<matchCount;i++)ms.push({
-     id:"r"+ri+"m"+(i+1),
-     players:[null,null],
-     winner:null,
-     status:"waiting",
-     liveYoutube1:"",
-     liveYoutube2:""
-   });
-   rounds.push({name:currentCount===2?"FINAL":("ROUND "+ri),matches:ms});
-   currentCount=matchCount;
-   ri++;
- }
- return {rounds};
-}
+ let n=1;while(n<real.length)n*=2;
+ const numByes=n-real.length,numFullMatches=n/2-numByes;
+ const fullReals=real.slice(0,numFullMatches*2),byeReals=real.slice(numFullMatches*2);
+ const ps=[];for(let i=0;i<fullReals.length;i+=2)ps.push(fullReals[i],fullReals[i+1]);for(const r of byeReals)ps.push(r,null);
+ let matches=[];for(let i=0;i<n;i+=2)matches.push({id:"r1m"+(i/2+1),players:[ps[i],ps[i+1]],winner:null,status:ps[i]&&ps[i+1]?"live":"bye",liveYoutube1:"",liveYoutube2:""});const rounds=[{name:"ROUND 1",matches}];let count=n/2,ri=2;while(count>=2){let ms=[];for(let i=0;i<count;i++)ms.push({id:"r"+ri+"m"+(i+1),players:[null,null],winner:null,status:"waiting",liveYoutube1:"",liveYoutube2:""});rounds.push({name:count===2?"FINAL":("ROUND "+ri),matches:ms});count/=2;ri++}return {rounds}}
 function same(a,b){return pn(a)!=="TBD"&&pn(a)===pn(b)}
 function advance(s,roundIndex,matchIndex,w){const r=s.rounds[roundIndex],m=r.matches[matchIndex];m.winner=w;m.status="done";const loser=same(m.players[0],w)?m.players[1]:m.players[0];if(roundIndex===s.rounds.length-1){s.podium.first=w;s.podium.second=loser;return}const next=s.rounds[roundIndex+1].matches[Math.floor(matchIndex/2)];const slot=matchIndex%2;next.players[slot]=w;if(next.players[0]&&next.players[1]){next.status="live";next.liveYoutube1="";next.liveYoutube2=""}}
 function maybeThird(s){if(s.rounds.length<2)return;if(!s.thirdPlace){const sf=s.rounds[s.rounds.length-2];if(sf.matches.length===2&&sf.matches.every(m=>m.winner)){const losers=sf.matches.map(m=>same(m.players[0],m.winner)?m.players[1]:m.players[0]);if(losers[0]&&losers[1])s.thirdPlace={id:"third",players:losers,winner:null,status:"live",liveYoutube1:"",liveYoutube2:""}}}}
-function autoAdvanceByes(s){
-  // Jika sebuah ronde mendapat jumlah winner ganjil, peserta terakhir
-  // otomatis menang/BYE dan diteruskan ke ronde berikutnya.
-  let changed=true;
-  while(changed){
-    changed=false;
-    for(let ri=0;ri<s.rounds.length-1;ri++){
-      const round=s.rounds[ri], next=s.rounds[ri+1];
-      for(let mi=0;mi<round.matches.length;mi++){
-        const m=round.matches[mi];
-        const a=m.players?.[0],b=m.players?.[1];
-        if(m.status==="waiting" && ((a&&!b)||(!a&&b))){
-          const w=a||b;
-          m.winner=w;
-          m.status="done";
-          const nm=next.matches[Math.floor(mi/2)];
-          const slot=mi%2;
-          if(nm){
-            nm.players[slot]=w;
-            if(nm.players[0]&&nm.players[1]){
-              nm.status="live";
-              nm.liveYoutube1="";
-              nm.liveYoutube2="";
-            }
-          }
-          changed=true;
-        }
-      }
-    }
-  }
-}
 function addLivePlayerToDraw(s,player){
   if(!s.rounds?.length)return;
   const locked=new Set();
@@ -177,8 +111,53 @@ if(action==="add-player"){
 if(action==="update-player"){
  const i=Number(b.index);if(!s.players[i])return json(res,404,{error:"Player tidak ditemukan"});const old=s.players[i],nextName=String(b.name??pn(old)).trim();if(!nextName)return json(res,400,{error:"Nama wajib"});if(nextName.toLowerCase()!==pn(old).toLowerCase()&&s.players.some((p,idx)=>idx!==i&&pn(p).toLowerCase()===nextName.toLowerCase()))return json(res,400,{error:"Nama sudah ada"});if(s.status!=="setup"&&nextName!==pn(old))return json(res,400,{error:"Nama player tidak bisa diubah setelah acara dimulai"});s.players[i]={name:nextName,youtube:cleanYoutube(b.youtube)};await save(s);return json(res,200,{ok:true});
 }
-if(action==="start"){if(s.players.length<2)return json(res,400,{error:"Minimal 2 player"});if(s.status!=="setup")return json(res,400,{error:"Tournament sudah dimulai"});const rawOrder=Array.isArray(b.order)?b.order.map(x=>String(x)):null;s=init();s.players=(await get()).players;const validOrder=rawOrder&&rawOrder.length===s.players.length&&rawOrder.every(nm=>s.players.some(p=>pn(p)===nm))?rawOrder:null;s.rounds=build(s.players,validOrder).rounds;s.status="live";autoAdvanceByes(s);await save(s);return json(res,200,{ok:true})}
-if(action==="winner"){if(s.status!=="live"&&s.status!=="completed")return json(res,400,{error:"Tournament belum dimulai"});let found=null;if(b.matchId==="third")found=s.thirdPlace;else for(const r of s.rounds)for(const m of r.matches)if(m.id===b.matchId)found=m;if(!found||found.status!=="live")return json(res,400,{error:"Match tidak live"});const w=found.players.find(p=>pn(p)===b.playerName);if(!w)return json(res,400,{error:"Player tidak ditemukan di match"});if(b.matchId==="third"){found.winner=w;s.podium.third=w;found.status="done"}else{let ri=s.rounds.findIndex(r=>r.matches.some(m=>m.id===found.id)),mi=s.rounds[ri].matches.findIndex(m=>m.id===found.id);advance(s,ri,mi,w);autoAdvanceByes(s)}maybeThird(s);const anyLive=[...s.rounds.flatMap(r=>r.matches||[]),s.thirdPlace].some(m=>m&&m.status==="live");if(s.podium.first&&s.podium.second&&!anyLive)s.status="completed";await save(s);return json(res,200,{ok:true,state:s})}
+if(action==="start"){if(s.players.length<2)return json(res,400,{error:"Minimal 2 player"});if(s.status!=="setup")return json(res,400,{error:"Tournament sudah dimulai"});const rawOrder=Array.isArray(b.order)?b.order.map(x=>String(x)):null;s=init();s.players=(await get()).players;const validOrder=rawOrder&&rawOrder.length===s.players.length&&rawOrder.every(nm=>s.players.some(p=>pn(p)===nm))?rawOrder:null;s.rounds=build(s.players,validOrder).rounds;s.status="live";for(let i=0;i<s.rounds[0].matches.length;i++){let m=s.rounds[0].matches[i];if(m.status==="bye"){const w=m.players.find(Boolean);m.winner=w;m.status="done";const next=s.rounds[1]?.matches[Math.floor(i/2)];if(next){next.players[i%2]=w;if(next.players[0]&&next.players[1]){next.status="live";next.liveYoutube1="";next.liveYoutube2=""}}}}await save(s);return json(res,200,{ok:true})}
+if(action==="edit-bracket"){
+ const incoming=Array.isArray(b.rounds)?b.rounds:[];
+ if(!s.rounds?.length)return json(res,400,{error:"Bracket belum dimulai"});
+ const byName=new Map((s.players||[]).map(p=>[pn(p),p]));
+ const usedByRound=new Set();
+ const clonePlayer=(raw)=>{const nm=String(raw||"").trim();return nm?byName.get(nm)||null:null};
+ for(let ri=0;ri<s.rounds.length;ri++){
+   const src=incoming[ri]?.matches||[];
+   if(src.length!==s.rounds[ri].matches.length)return json(res,400,{error:"Jumlah match tidak boleh diubah"});
+   for(let mi=0;mi<src.length;mi++){
+     const vals=Array.isArray(src[mi].players)?src[mi].players:[];
+     const a=clonePlayer(vals[0]),bb=clonePlayer(vals[1]);
+     if((vals[0]&&!a)||(vals[1]&&!bb))return json(res,400,{error:"Ada player yang tidak terdaftar"});
+     for(const pl of [a,bb])if(pl){const k=pn(pl).toLowerCase();if(usedByRound.has(k))return json(res,400,{error:"Player yang sama tidak boleh dua kali dalam satu ronde: "+pn(pl)});usedByRound.add(k)}
+     const m=s.rounds[ri].matches[mi];
+     const oldNames=(m.players||[]).map(p=>pn(p));
+     m.players=[a,bb];
+     const wn=String(src[mi].winner||"").trim();
+     const w=wn&&(a&&pn(a)===wn||bb&&pn(bb)===wn)?(a&&pn(a)===wn?a:bb):null;
+     m.winner=w||null;
+     if(a&&bb)m.status=w?"done":"live";
+     else if(a||bb){m.status="bye";m.winner=a||bb}
+     else {m.status="waiting";m.winner=null}
+     if(oldNames[0]!==pn(a)||oldNames[1]!==pn(bb)||!w){m.liveYoutube1="";m.liveYoutube2=""}
+   }
+   usedByRound.clear();
+ }
+ if(Array.isArray(b.thirdPlace)&&s.thirdPlace){
+   const a=clonePlayer(b.thirdPlace[0]),bb=clonePlayer(b.thirdPlace[1]);
+   s.thirdPlace.players=[a,bb];
+   const wn=String(b.thirdWinner||"").trim();
+   const w=wn&&(a&&pn(a)===wn||bb&&pn(bb)===wn)?(a&&pn(a)===wn?a:bb):null;
+   s.thirdPlace.winner=w||null;
+   s.thirdPlace.status=a&&bb?(w?"done":"live"):(a||bb?"bye":"waiting");
+   if(s.thirdPlace.status==="bye")s.thirdPlace.winner=a||bb;
+   s.thirdPlace.liveYoutube1="";s.thirdPlace.liveYoutube2="";
+ }
+ s.podium={first:null,second:null,third:null};
+ const final=s.rounds[s.rounds.length-1]?.matches?.[0];
+ if(final?.winner){s.podium.first=final.winner;const loser=(final.players||[]).find(p=>p&&pn(p)!==pn(final.winner));s.podium.second=loser||null}
+ if(s.thirdPlace?.winner)s.podium.third=s.thirdPlace.winner;
+ const anyLive=[...s.rounds.flatMap(r=>r.matches||[]),s.thirdPlace].some(m=>m&&m.status==="live");
+ s.status=anyLive?"live":(s.podium.first?"completed":"live");
+ await save(s);return json(res,200,{ok:true,state:s});
+}
+if(action==="winner"){if(s.status!=="live"&&s.status!=="completed")return json(res,400,{error:"Tournament belum dimulai"});let found=null;if(b.matchId==="third")found=s.thirdPlace;else for(const r of s.rounds)for(const m of r.matches)if(m.id===b.matchId)found=m;if(!found||found.status!=="live")return json(res,400,{error:"Match tidak live"});const w=found.players.find(p=>pn(p)===b.playerName);if(!w)return json(res,400,{error:"Player tidak ditemukan di match"});if(b.matchId==="third"){found.winner=w;s.podium.third=w;found.status="done"}else{let ri=s.rounds.findIndex(r=>r.matches.some(m=>m.id===found.id)),mi=s.rounds[ri].matches.findIndex(m=>m.id===found.id);advance(s,ri,mi,w)}maybeThird(s);const anyLive=[...s.rounds.flatMap(r=>r.matches||[]),s.thirdPlace].some(m=>m&&m.status==="live");if(s.podium.first&&s.podium.second&&!anyLive)s.status="completed";await save(s);return json(res,200,{ok:true,state:s})}
 if(action==="reset"){await save(init());return json(res,200,{ok:true})}
 if(action==="reset-bracket"){s.rounds=[];s.thirdPlace=null;s.podium={first:null,second:null,third:null};s.status="setup";await save(s);return json(res,200,{ok:true})}
 return json(res,404,{error:"Action tidak dikenal"})}catch(e){console.error(e);return json(res,500,{error:"Server error",detail:String(e.message||e)})}}

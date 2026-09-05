@@ -10,29 +10,21 @@ function liveEditors(s){
  const el=$("#liveEditors");if(!el)return;
  if(!live.length){el.innerHTML='<div class="empty">Belum ada match live.</div>';return}
  el.innerHTML=live.map(m=>{
-   const title=m.players.map(name).join(" vs "),p1=m.liveYoutube1||m.liveYoutube||"",p2=m.liveYoutube2||"";
-   const safe=String(m.id).replace(/[^a-zA-Z0-9_-]/g,"");
-   return `<div class="admin-live-card">
-     <strong>🔴 ${title}</strong>
-     <small>${m.id} • POV 1: ${p1?"TERSIMPAN":"BELUM"} • POV 2: ${p2?"TERSIMPAN":"BELUM"}</small>
-     <div class="live-editor">
-       <input id="live1-${safe}" data-live-input="1" value="${escAttr(p1)}" placeholder="POV 1 — link YouTube / YouTube Live">
-       <input id="live2-${safe}" data-live-input="2" value="${escAttr(p2)}" placeholder="POV 2 — link YouTube / YouTube Live (cadangan)">
-       <button data-live="${m.id}" data-safe="${safe}">SIMPAN 2 POV</button>
-     </div>
-   </div>`
+   const p1=m.liveChannel1||m.liveYoutube1||"",p2=m.liveChannel2||m.liveYoutube2||"",safe=String(m.id).replace(/[^a-zA-Z0-9_-]/g,"");
+   return `<div class="admin-live-card"><strong>🔴 ${m.players.map(name).join(" vs ")}</strong>
+   <small>${m.id} • POV 1: ${m.liveYoutube1?"LIVE TERDETEKSI":"BELUM"} • POV 2: ${m.liveYoutube2?"LIVE TERDETEKSI":"BELUM"}</small>
+   <div class="live-editor">
+   <input id="live1-${safe}" value="${escAttr(p1)}" placeholder="POV 1 — @channel YouTube">
+   <input id="live2-${safe}" value="${escAttr(p2)}" placeholder="POV 2 — @channel YouTube">
+   <button data-live="${m.id}" data-safe="${safe}">CARI & SIMPAN 2 POV</button>
+   </div>
+   <small>Contoh: @paddang — sistem akan mencari siaran LIVE channel tersebut.</small></div>`
  }).join("");
- el.querySelectorAll("[data-live]").forEach(b=>b.onclick=async()=>{
-   const mid=b.dataset.live,safe=b.dataset.safe;
-   const a=$("#live1-"+safe),c=$("#live2-"+safe);
-   try{
-     b.disabled=true;b.textContent="MENYIMPAN...";
-     await api("set-live",{matchId:mid,youtube1:a.value.trim(),youtube2:c.value.trim()});
-     $("#adminMsg").textContent="2 POV untuk "+mid+" berhasil disimpan.";
-     a.blur();c.blur();
-     load(true);
-   }catch(e){$("#adminMsg").textContent=e.message}
-   finally{b.disabled=false;b.textContent="SIMPAN 2 POV"}
+ el.querySelectorAll("[data-live]").forEach(btn=>btn.onclick=async()=>{
+   const safe=btn.dataset.safe,a=$("#live1-"+safe),c=$("#live2-"+safe);
+   try{btn.disabled=true;btn.textContent="MENCARI LIVE...";await api("set-live",{matchId:btn.dataset.live,youtube1:a.value.trim(),youtube2:c.value.trim()});$("#adminMsg").textContent="POV Live berhasil ditemukan dan disimpan.";load(true)}
+   catch(e){$("#adminMsg").textContent=e.message}
+   finally{btn.disabled=false;btn.textContent="CARI & SIMPAN 2 POV"}
  })
 }
 window.addEventListener("resize",()=>{const c=$("#adminBracket");if(c)drawConnectors(c)});

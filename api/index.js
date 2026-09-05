@@ -55,15 +55,19 @@ function json(res,status,obj){res.statusCode=status;res.setHeader("Content-Type"
 function body(req){if(req.body&&typeof req.body==="object")return Promise.resolve(req.body);return new Promise(resolve=>{let x="";req.on("data",c=>x+=c);req.on("end",()=>{try{resolve(x?JSON.parse(x):{})}catch{resolve({})}})})}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function build(players,order){
- let ps;
+ let real;
  if(Array.isArray(order)&&order.length){
    const byName={};for(const p of players)byName[pn(p)]=p;
    const mapped=order.map(nm=>byName[nm]).filter(Boolean).map(p=>({...p}));
-   ps=mapped.length===players.length?mapped:shuffle(players.map(p=>({...p})));
+   real=mapped.length===players.length?mapped:shuffle(players.map(p=>({...p})));
  }else{
-   ps=shuffle(players.map(p=>({...p})));
+   real=shuffle(players.map(p=>({...p})));
  }
- let n=1;while(n<ps.length)n*=2;while(ps.length<n)ps.push(null);let matches=[];for(let i=0;i<n;i+=2)matches.push({id:"r1m"+(i/2+1),players:[ps[i],ps[i+1]],winner:null,status:ps[i]&&ps[i+1]?"live":"bye",liveYoutube1:"",liveYoutube2:""});const rounds=[{name:"ROUND 1",matches}];let count=n/2,ri=2;while(count>=2){let ms=[];for(let i=0;i<count;i++)ms.push({id:"r"+ri+"m"+(i+1),players:[null,null],winner:null,status:"waiting",liveYoutube1:"",liveYoutube2:""});rounds.push({name:count===2?"FINAL":("ROUND "+ri),matches:ms});count/=2;ri++}return {rounds}}
+ let n=1;while(n<real.length)n*=2;
+ const numByes=n-real.length,numFullMatches=n/2-numByes;
+ const fullReals=real.slice(0,numFullMatches*2),byeReals=real.slice(numFullMatches*2);
+ const ps=[];for(let i=0;i<fullReals.length;i+=2)ps.push(fullReals[i],fullReals[i+1]);for(const r of byeReals)ps.push(r,null);
+ let matches=[];for(let i=0;i<n;i+=2)matches.push({id:"r1m"+(i/2+1),players:[ps[i],ps[i+1]],winner:null,status:ps[i]&&ps[i+1]?"live":"bye",liveYoutube1:"",liveYoutube2:""});const rounds=[{name:"ROUND 1",matches}];let count=n/2,ri=2;while(count>=2){let ms=[];for(let i=0;i<count;i++)ms.push({id:"r"+ri+"m"+(i+1),players:[null,null],winner:null,status:"waiting",liveYoutube1:"",liveYoutube2:""});rounds.push({name:count===2?"FINAL":("ROUND "+ri),matches:ms});count/=2;ri++}return {rounds}}
 function same(a,b){return pn(a)!=="TBD"&&pn(a)===pn(b)}
 function advance(s,roundIndex,matchIndex,w){const r=s.rounds[roundIndex],m=r.matches[matchIndex];m.winner=w;m.status="done";const loser=same(m.players[0],w)?m.players[1]:m.players[0];if(roundIndex===s.rounds.length-1){s.podium.first=w;s.podium.second=loser;return}const next=s.rounds[roundIndex+1].matches[Math.floor(matchIndex/2)];const slot=matchIndex%2;next.players[slot]=w;if(next.players[0]&&next.players[1]){next.status="live";next.liveYoutube1="";next.liveYoutube2=""}}
 function maybeThird(s){if(s.rounds.length<2)return;if(!s.thirdPlace){const sf=s.rounds[s.rounds.length-2];if(sf.matches.length===2&&sf.matches.every(m=>m.winner)){const losers=sf.matches.map(m=>same(m.players[0],m.winner)?m.players[1]:m.players[0]);if(losers[0]&&losers[1])s.thirdPlace={id:"third",players:losers,winner:null,status:"live",liveYoutube1:"",liveYoutube2:""}}}}

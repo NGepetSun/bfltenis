@@ -4,48 +4,34 @@ let clientPromise;
 function redis(){if(!clientPromise){const c=createClient({url:process.env.REDIS_URL});c.on("error",e=>console.error(e));clientPromise=c.connect().then(()=>c)}return clientPromise}
 function init(){return {status:"setup",players:[],rounds:[],thirdPlace:null,podium:{first:null,second:null,third:null}}}
 function cleanYoutube(v){return typeof v==="string"?v.trim():""}
-function cleanChannel(v){
-  if(typeof v!=="string")return "";
-  let x=v.trim().replace(/^https?:\/\/(www\.)?youtube\.com\/@/i,"@");
-  if(!x.startsWith("@"))x="@"+x;
-  return x;
-}
-async function ytJson(url){
-  const r=await fetch(url);
-  const d=await r.json().catch(()=>({}));
-  if(!r.ok)throw new Error(d?.error?.message||("YouTube API "+r.status));
-  return d;
-}
-async function findLiveFromChannel(input){
-  const key=process.env.YOUTUBE_API_KEY;
-  if(!key)throw new Error("YOUTUBE_API_KEY belum diatur di Vercel.");
-  const handle=cleanChannel(input);
-  const c=await ytJson("https://www.googleapis.com/youtube/v3/channels?part=id&forHandle="+encodeURIComponent(handle)+"&key="+encodeURIComponent(key));
-  const channelId=c.items?.[0]?.id;
-  if(!channelId)throw new Error("Channel "+handle+" tidak ditemukan.");
-  const q=new URLSearchParams({part:"snippet",channelId,type:"video",eventType:"live",maxResults:"1",key});
-  const sr=await ytJson("https://www.googleapis.com/youtube/v3/search?"+q.toString());
-  const item=sr.items?.[0];
-  return {handle,channelId,videoId:item?.id?.videoId||"",title:item?.snippet?.title||""};
+async function resolveChannelId(handleRaw){
+  let h=String(handleRaw||"").trim();
+  if(/^UC[0-9A-Za-z_-]{20,}$/.test(h))return h; // sudah berupa Channel ID
+  const m=h.match(/@([\w.-]+)/);
+  const handle=m?("@"+m[1]):(h.startsWith("@")?h:"@"+h);
+  const r=await fetch("https://www.youtube.com/"+handle,{headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}});
+  if(!r.ok)throw new Error("Gagal membuka channel "+handle+" (HTTP "+r.status+")");
+  const html=await r.text();
+  const cm=html.match(/"channelId":"(UC[0-9A-Za-z_-]{20,})"/)||html.match(/"externalId":"(UC[0-9A-Za-z_-]{20,})"/);
+  if(!cm)throw new Error("Channel ID tidak ditemukan untuk "+handle);
+  return cm[1];
 }
 
 function pn(p){return typeof p==="string"?p:(p?.name||"TBD")}
-const LIVE_CACHE_MS=180000; // 3 menit, biar hemat kuota YouTube API
-function isHandleLike(raw){return /^@[\w.-]+$/.test(raw)||/^https?:\/\/(www\.)?youtube\.com\/@[\w.-]+/i.test(raw)}
+function isHandleLike(raw){return /^@[\w.-]+$/.test(raw)||/^https?:\/\/(www\.)?youtube\.com\/@[\w.-]+/i.test(raw)||/^UC[0-9A-Za-z_-]{20,}$/.test(raw)}
 async function resolvedStreamForName(s,playerName){
   if(!playerName||playerName==="TBD")return "";
   const p=(s.players||[]).find(x=>pn(x)===playerName);
   if(!p)return "";
   const raw=cleanYoutube(p.youtube||"");
   if(!raw)return "";
-  if(!isHandleLike(raw))return raw; // link video/live langsung, tidak perlu dicek ke API
-  const now=Date.now();
-  p.liveCache=p.liveCache||{};
-  if(p.liveCache.src===raw&&(now-(p.liveCache.at||0))<LIVE_CACHE_MS)return p.liveCache.val||"";
-  let val="";
-  try{if(process.env.YOUTUBE_API_KEY){const r=await findLiveFromChannel(raw);val=r.videoId?("https://www.youtube.com/watch?v="+r.videoId):""}}catch(e){}
-  p.liveCache={src:raw,val,at:now};
-  return val;
+  if(!isHandleLike(raw))return raw; // link video/live langsung, tidak perlu diproses
+  if(p.channelIdCache&&p.channelIdCache.src===raw)return "https://www.youtube.com/embed/live_stream?channel="+p.channelIdCache.id;
+  try{
+    const id=await resolveChannelId(raw);
+    p.channelIdCache={src:raw,id};
+    return "https://www.youtube.com/embed/live_stream?channel="+id;
+  }catch(e){console.error(e.message||e);return ""}
 }
 async function refreshLiveStreams(s){
   let changed=false;
@@ -68,7 +54,16 @@ function setCookie(res,v){res.setHeader("Set-Cookie",COOKIE+"="+v+"; Path=/; Htt
 function json(res,status,obj){res.statusCode=status;res.setHeader("Content-Type","application/json; charset=utf-8");res.end(JSON.stringify(obj))}
 function body(req){if(req.body&&typeof req.body==="object")return Promise.resolve(req.body);return new Promise(resolve=>{let x="";req.on("data",c=>x+=c);req.on("end",()=>{try{resolve(x?JSON.parse(x):{})}catch{resolve({})}})})}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function build(players){let ps=shuffle(players.map(p=>({...p})));let n=1;while(n<ps.length)n*=2;while(ps.length<n)ps.push(null);let matches=[];for(let i=0;i<n;i+=2)matches.push({id:"r1m"+(i/2+1),players:[ps[i],ps[i+1]],winner:null,status:ps[i]&&ps[i+1]?"live":"bye",liveYoutube1:"",liveYoutube2:""});const rounds=[{name:"ROUND 1",matches}];let count=n/2,ri=2;while(count>=2){let ms=[];for(let i=0;i<count;i++)ms.push({id:"r"+ri+"m"+(i+1),players:[null,null],winner:null,status:"waiting",liveYoutube1:"",liveYoutube2:""});rounds.push({name:count===2?"FINAL":("ROUND "+ri),matches:ms});count/=2;ri++}return {rounds}}
+function build(players,order){
+ let ps;
+ if(Array.isArray(order)&&order.length){
+   const byName={};for(const p of players)byName[pn(p)]=p;
+   const mapped=order.map(nm=>byName[nm]).filter(Boolean).map(p=>({...p}));
+   ps=mapped.length===players.length?mapped:shuffle(players.map(p=>({...p})));
+ }else{
+   ps=shuffle(players.map(p=>({...p})));
+ }
+ let n=1;while(n<ps.length)n*=2;while(ps.length<n)ps.push(null);let matches=[];for(let i=0;i<n;i+=2)matches.push({id:"r1m"+(i/2+1),players:[ps[i],ps[i+1]],winner:null,status:ps[i]&&ps[i+1]?"live":"bye",liveYoutube1:"",liveYoutube2:""});const rounds=[{name:"ROUND 1",matches}];let count=n/2,ri=2;while(count>=2){let ms=[];for(let i=0;i<count;i++)ms.push({id:"r"+ri+"m"+(i+1),players:[null,null],winner:null,status:"waiting",liveYoutube1:"",liveYoutube2:""});rounds.push({name:count===2?"FINAL":("ROUND "+ri),matches:ms});count/=2;ri++}return {rounds}}
 function same(a,b){return pn(a)!=="TBD"&&pn(a)===pn(b)}
 function advance(s,roundIndex,matchIndex,w){const r=s.rounds[roundIndex],m=r.matches[matchIndex];m.winner=w;m.status="done";const loser=same(m.players[0],w)?m.players[1]:m.players[0];if(roundIndex===s.rounds.length-1){s.podium.first=w;s.podium.second=loser;return}const next=s.rounds[roundIndex+1].matches[Math.floor(matchIndex/2)];const slot=matchIndex%2;next.players[slot]=w;if(next.players[0]&&next.players[1]){next.status="live";next.liveYoutube1="";next.liveYoutube2=""}}
 function maybeThird(s){if(s.rounds.length<2)return;if(!s.thirdPlace){const sf=s.rounds[s.rounds.length-2];if(sf.matches.length===2&&sf.matches.every(m=>m.winner)){const losers=sf.matches.map(m=>same(m.players[0],m.winner)?m.players[1]:m.players[0]);if(losers[0]&&losers[1])s.thirdPlace={id:"third",players:losers,winner:null,status:"live",liveYoutube1:"",liveYoutube2:""}}}}
@@ -112,7 +107,7 @@ if(action==="add-player"){
 if(action==="update-player"){
  const i=Number(b.index);if(!s.players[i])return json(res,404,{error:"Player tidak ditemukan"});const old=s.players[i],nextName=String(b.name??pn(old)).trim();if(!nextName)return json(res,400,{error:"Nama wajib"});if(nextName.toLowerCase()!==pn(old).toLowerCase()&&s.players.some((p,idx)=>idx!==i&&pn(p).toLowerCase()===nextName.toLowerCase()))return json(res,400,{error:"Nama sudah ada"});if(s.status!=="setup"&&nextName!==pn(old))return json(res,400,{error:"Nama player tidak bisa diubah setelah acara dimulai"});s.players[i]={name:nextName,youtube:cleanYoutube(b.youtube)};await save(s);return json(res,200,{ok:true});
 }
-if(action==="start"){if(s.players.length<2)return json(res,400,{error:"Minimal 2 player"});if(s.status!=="setup")return json(res,400,{error:"Tournament sudah dimulai"});s=init();s.players=(await get()).players;s.rounds=build(s.players).rounds;s.status="live";for(let i=0;i<s.rounds[0].matches.length;i++){let m=s.rounds[0].matches[i];if(m.status==="bye"){const w=m.players.find(Boolean);m.winner=w;m.status="done";const next=s.rounds[1]?.matches[Math.floor(i/2)];if(next){next.players[i%2]=w;if(next.players[0]&&next.players[1]){next.status="live";next.liveYoutube1="";next.liveYoutube2=""}}}}await save(s);return json(res,200,{ok:true})}
+if(action==="start"){if(s.players.length<2)return json(res,400,{error:"Minimal 2 player"});if(s.status!=="setup")return json(res,400,{error:"Tournament sudah dimulai"});const rawOrder=Array.isArray(b.order)?b.order.map(x=>String(x)):null;s=init();s.players=(await get()).players;const validOrder=rawOrder&&rawOrder.length===s.players.length&&rawOrder.every(nm=>s.players.some(p=>pn(p)===nm))?rawOrder:null;s.rounds=build(s.players,validOrder).rounds;s.status="live";for(let i=0;i<s.rounds[0].matches.length;i++){let m=s.rounds[0].matches[i];if(m.status==="bye"){const w=m.players.find(Boolean);m.winner=w;m.status="done";const next=s.rounds[1]?.matches[Math.floor(i/2)];if(next){next.players[i%2]=w;if(next.players[0]&&next.players[1]){next.status="live";next.liveYoutube1="";next.liveYoutube2=""}}}}await save(s);return json(res,200,{ok:true})}
 if(action==="winner"){if(s.status!=="live"&&s.status!=="completed")return json(res,400,{error:"Tournament belum dimulai"});let found=null;if(b.matchId==="third")found=s.thirdPlace;else for(const r of s.rounds)for(const m of r.matches)if(m.id===b.matchId)found=m;if(!found||found.status!=="live")return json(res,400,{error:"Match tidak live"});const w=found.players.find(p=>pn(p)===b.playerName);if(!w)return json(res,400,{error:"Player tidak ditemukan di match"});if(b.matchId==="third"){found.winner=w;s.podium.third=w;found.status="done"}else{let ri=s.rounds.findIndex(r=>r.matches.some(m=>m.id===found.id)),mi=s.rounds[ri].matches.findIndex(m=>m.id===found.id);advance(s,ri,mi,w)}maybeThird(s);const anyLive=[...s.rounds.flatMap(r=>r.matches||[]),s.thirdPlace].some(m=>m&&m.status==="live");if(s.podium.first&&s.podium.second&&!anyLive)s.status="completed";await save(s);return json(res,200,{ok:true,state:s})}
 if(action==="reset"){await save(init());return json(res,200,{ok:true})}
 return json(res,404,{error:"Action tidak dikenal"})}catch(e){console.error(e);return json(res,500,{error:"Server error",detail:String(e.message||e)})}}

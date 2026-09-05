@@ -40,6 +40,45 @@ async function load(forceLive=false){
 }
 function renderPlayers(){const p=state.players||[];$("#count").textContent=p.length+" PLAYER";$("#players").innerHTML=p.map((x,i)=>`<div class="player-row"><input data-n="${i}" class="pn" value="${esc(name(x))}"><input data-y="${i}" class="py" value="${esc(x?.youtube||"")}" placeholder="YouTube default (opsional)"><button data-save="${i}">SAVE</button></div>`).join("");document.querySelectorAll("[data-save]").forEach(b=>b.onclick=async()=>{const i=b.dataset.save;try{await api("update-player",{index:+i,name:$(`.pn[data-n="${i}"]`).value,youtube:$(`.py[data-y="${i}"]`).value});$("#adminMsg").textContent="Player tersimpan.";load(true)}catch(e){$("#adminMsg").textContent=e.message}})}
 async function winner(mid,n){if(!confirm("Menangkan "+n+"?"))return;try{await api("winner",{matchId:mid,playerName:n});$("#adminMsg").textContent=n+" menang dan otomatis maju.";load(true)}catch(e){$("#adminMsg").textContent=e.message}}
+
+function playerOptions(selected){
+ const players=state.players||[];
+ return '<option value="">— KOSONG —</option>'+players.map(p=>{const n=name(p);return `<option value="${escAttr(n)}" ${n===selected?'selected':''}>${esc(n)}</option>`}).join("");
+}
+function renderBracketEditor(){
+ const el=$("#bracketEditor");if(!el)return;
+ if(!state.rounds?.length){el.innerHTML='<div class="empty">Bracket belum dimulai.</div>';return}
+ const rounds=state.rounds.map((r,ri)=>`<div class="editor-round"><h3>${esc(r.name)}</h3><div class="editor-matches">${r.matches.map((m,mi)=>{
+   const a=name(m.players?.[0])==='TBD'?'':name(m.players?.[0]), b=name(m.players?.[1])==='TBD'?'':name(m.players?.[1]);
+   const wn=m.winner?name(m.winner):'';
+   return `<div class="editor-match"><div class="editor-match-title">${esc(m.id)}</div><select class="edit-p" data-ri="${ri}" data-mi="${mi}" data-si="0">${playerOptions(a)}</select><select class="edit-p" data-ri="${ri}" data-mi="${mi}" data-si="1">${playerOptions(b)}</select><select class="edit-w" data-ri="${ri}" data-mi="${mi}"><option value="">— BELUM ADA PEMENANG —</option>${a?`<option value="${escAttr(a)}" ${wn===a?'selected':''}>🏆 ${esc(a)}</option>`:''}${b?`<option value="${escAttr(b)}" ${wn===b?'selected':''}>🏆 ${esc(b)}</option>`:''}</select></div>`
+ }).join("")}</div></div>`).join("");
+ let third='';if(state.thirdPlace){const a=name(state.thirdPlace.players?.[0])==='TBD'?'':name(state.thirdPlace.players?.[0]),b=name(state.thirdPlace.players?.[1])==='TBD'?'':name(state.thirdPlace.players?.[1]),wn=state.thirdPlace.winner?name(state.thirdPlace.winner):'';third=`<div class="editor-round"><h3>3RD PLACE</h3><div class="editor-match"><div class="editor-match-title">third</div><select class="edit-tp" data-si="0">${playerOptions(a)}</select><select class="edit-tp" data-si="1">${playerOptions(b)}</select><select class="edit-tw"><option value="">— BELUM ADA PEMENANG —</option>${a?`<option value="${escAttr(a)}" ${wn===a?'selected':''}>🏆 ${esc(a)}</option>`:''}${b?`<option value="${escAttr(b)}" ${wn===b?'selected':''}>🏆 ${esc(b)}</option>`:''}</select></div></div>`}
+ el.innerHTML=`<div class="edit-help">Pilih player di slot mana pun untuk memindahkan/mengganti posisi. Satu player hanya boleh muncul sekali dalam satu ronde. Pilih pemenang jika ingin mengubah hasil match.</div>${rounds}${third}<div class="controls" style="margin-top:12px"><button id="saveBracketEdit">💾 SIMPAN PERUBAHAN BRACKET</button><button class="danger" id="cancelBracketEdit">BATAL</button></div>`;
+ el.querySelectorAll('.edit-p').forEach(sel=>sel.onchange=()=>syncEditorWinners());
+ el.querySelectorAll('.edit-tp').forEach(sel=>sel.onchange=()=>syncEditorWinners());
+ $("#saveBracketEdit").onclick=saveBracketEdit;
+ $("#cancelBracketEdit").onclick=()=>{el.hidden=true;$("#editBracketBtn").textContent="✏️ EDIT / PINDAH PLAYER"};
+ el.hidden=false;$("#editBracketBtn").textContent="✖ TUTUP EDITOR";
+}
+function syncEditorWinners(){
+ document.querySelectorAll('.editor-match').forEach(card=>{
+   const a=card.querySelector('.edit-p[data-si="0"]')?.value||'',b=card.querySelector('.edit-p[data-si="1"]')?.value||'',w=card.querySelector('.edit-w');
+   if(!w)return;const cur=w.value;w.innerHTML='<option value="">— BELUM ADA PEMENANG —</option>'+(a?`<option value="${escAttr(a)}">🏆 ${esc(a)}</option>`:'')+(b?`<option value="${escAttr(b)}">🏆 ${esc(b)}</option>`:'');if(cur===a||cur===b)w.value=cur;
+ });
+ const tp=document.querySelector('.editor-match .edit-tp');
+ const card=[...document.querySelectorAll('.editor-match')].find(x=>x.querySelector('.edit-tp'));
+ if(card){const a=card.querySelector('.edit-tp[data-si="0"]')?.value||'',b=card.querySelector('.edit-tp[data-si="1"]')?.value||'',w=card.querySelector('.edit-tw');if(w){const cur=w.value;w.innerHTML='<option value="">— BELUM ADA PEMENANG —</option>'+(a?`<option value="${escAttr(a)}">🏆 ${esc(a)}</option>`:'')+(b?`<option value="${escAttr(b)}">🏆 ${esc(b)}</option>`:'');if(cur===a||cur===b)w.value=cur}}
+}
+async function saveBracketEdit(){
+ try{
+  const rounds=(state.rounds||[]).map((r,ri)=>({matches:r.matches.map((m,mi)=>({players:[document.querySelector(`.edit-p[data-ri="${ri}"][data-mi="${mi}"][data-si="0"]`).value,document.querySelector(`.edit-p[data-ri="${ri}"][data-mi="${mi}"][data-si="1"]`).value],winner:document.querySelector(`.edit-w[data-ri="${ri}"][data-mi="${mi}"]`).value}))}));
+  const tp=[...document.querySelectorAll('.edit-tp')].sort((a,b)=>+a.dataset.si-+b.dataset.si).map(x=>x.value);const tw=$(".edit-tw")?.value||'';
+  if(!confirm("Simpan susunan player dan hasil winner baru?"))return;
+  await api("edit-bracket",{rounds,thirdPlace:state.thirdPlace?tp:null,thirdWinner:tw});$("#editMsg").textContent="Bracket berhasil diperbarui.";load(true);
+ }catch(e){$("#editMsg").textContent=e.message}
+}
+$("#editBracketBtn").onclick=()=>{const e=$("#bracketEditor");if(e.hidden)renderBracketEditor();else{e.hidden=true;$("#editBracketBtn").textContent="✏️ EDIT / PINDAH PLAYER"}};
 $("#loginForm").onsubmit=async e=>{e.preventDefault();try{await api("login",{username:$("#username").value,password:$("#password").value});load(true)}catch(x){$("#loginMsg").textContent=x.message}}
 $("#addForm").onsubmit=async e=>{e.preventDefault();try{await api("add-player",{name:$("#playerName").value,youtube:$("#playerYoutube").value});$("#playerName").value="";$("#playerYoutube").value="";$("#adminMsg").textContent="Player ditambahkan.";load(true)}catch(x){$("#adminMsg").textContent=x.message}}
 let previewOrder=null;
@@ -49,14 +88,15 @@ function generatePreview(){
  const arr=players.slice();
  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}
  previewOrder=arr.map(name);
-
- // Preview juga dinamis: tidak ada 10 slot BYE seperti bracket 32 slot.
- const pairs=[];
- for(let i=0;i<arr.length;i+=2)pairs.push([arr[i],arr[i+1]||null]);
+ let n=1;while(n<arr.length)n*=2;
+ const numByes=n-arr.length,numFullMatches=n/2-numByes;
+ const fullReals=arr.slice(0,numFullMatches*2),byeReals=arr.slice(numFullMatches*2);
+ const padded=[];for(let i=0;i<fullReals.length;i+=2)padded.push(fullReals[i],fullReals[i+1]);for(const r of byeReals)padded.push(r,null);
+ const pairs=[];for(let i=0;i<n;i+=2)pairs.push([padded[i],padded[i+1]]);
  $("#previewList").innerHTML=pairs.map(pr=>{
    const a=pr[0]?name(pr[0]):null,b=pr[1]?name(pr[1]):null;
    if(a&&b)return `<div class="preview-pair"><span>${esc(a)}</span><b>VS</b><span>${esc(b)}</span></div>`;
-   return `<div class="preview-pair"><span>${esc(a||b)}</span><b>BYE</b><span class="tbd">otomatis WIN & maju</span></div>`;
+   return `<div class="preview-pair"><span>${esc(a||b)}</span><b>BYE</b><span class="tbd">langsung maju ronde ini</span></div>`;
  }).join("");
  $("#previewBox").hidden=false;
 }

@@ -90,6 +90,11 @@ $("#togglePublicPreview").onclick=()=>{
  }
 }
 $("#refreshPublicPreview").onclick=()=>{$("#publicPreviewFrame").src="/?t="+Date.now()};
-$("#resetBtn").onclick=async()=>{if(!confirm("RESET SEMUA DATA TURNAMEN?"))return;try{await api("reset");previewOrder=null;$("#previewBox").hidden=true;$("#adminMsg").textContent="Tournament di-reset.";load(true)}catch(e){$("#adminMsg").textContent=e.message}}
+$("#resetBracketBtn").onclick=async()=>{
+ if(!confirm("Reset bracket ke status BELUM DIMULAI?\n\nPlayer TETAP ada (tidak terhapus), tapi hasil pertandingan, live stream, dan podium akan dikosongkan supaya bracket bisa diacak ulang dari awal."))return;
+ try{await api("reset-bracket");previewOrder=null;$("#previewBox").hidden=true;$("#adminMsg").textContent="Bracket direset. Player tetap ada — silakan PREVIEW/ACAK BRACKET lagi.";load(true)}
+ catch(e){$("#adminMsg").textContent=e.message}
+}
+$("#resetBtn").onclick=async()=>{if(!confirm("RESET SEMUA DATA TURNAMEN?\n\nIni akan menghapus SEMUA PLAYER juga, bukan cuma bracket."))return;try{await api("reset");previewOrder=null;$("#previewBox").hidden=true;$("#adminMsg").textContent="Tournament di-reset.";load(true)}catch(e){$("#adminMsg").textContent=e.message}}
 $("#logoutBtn").onclick=async()=>{await api("logout");location.reload()};
 load(true);setInterval(()=>{if(state)load(false)},2000);

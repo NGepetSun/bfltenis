@@ -32,6 +32,9 @@ async function load(forceLive=false){
    const editingLive=active&&active.closest&&active.closest("#liveEditors");
    if(forceLive||!editingLive)liveEditors(state);
    bracket(state);
+   const setup=state.status==="setup";
+   $("#previewBtn").hidden=!setup;
+   if(!setup)$("#previewBox").hidden=true;
   }else{$("#loginBox").hidden=false;$("#panel").hidden=true}
  }catch(e){$("#loginMsg").textContent=e.message}
 }
@@ -39,7 +42,38 @@ function renderPlayers(){const p=state.players||[];$("#count").textContent=p.len
 async function winner(mid,n){if(!confirm("Menangkan "+n+"?"))return;try{await api("winner",{matchId:mid,playerName:n});$("#adminMsg").textContent=n+" menang dan otomatis maju.";load(true)}catch(e){$("#adminMsg").textContent=e.message}}
 $("#loginForm").onsubmit=async e=>{e.preventDefault();try{await api("login",{username:$("#username").value,password:$("#password").value});load(true)}catch(x){$("#loginMsg").textContent=x.message}}
 $("#addForm").onsubmit=async e=>{e.preventDefault();try{await api("add-player",{name:$("#playerName").value,youtube:$("#playerYoutube").value});$("#playerName").value="";$("#playerYoutube").value="";$("#adminMsg").textContent="Player ditambahkan.";load(true)}catch(x){$("#adminMsg").textContent=x.message}}
-$("#startBtn").onclick=async()=>{if(!confirm("Mulai/randomize bracket sekarang?"))return;try{await api("start");$("#adminMsg").textContent="Bracket dimulai.";load(true)}catch(e){$("#adminMsg").textContent=e.message}}
-$("#resetBtn").onclick=async()=>{if(!confirm("RESET SEMUA DATA TURNAMEN?"))return;try{await api("reset");$("#adminMsg").textContent="Tournament di-reset.";load(true)}catch(e){$("#adminMsg").textContent=e.message}}
+let previewOrder=null;
+function generatePreview(){
+ const players=(state?.players||[]).filter(p=>name(p)&&name(p)!=="TBD");
+ if(players.length<2){$("#adminMsg").textContent="Minimal 2 player untuk preview bracket.";return}
+ const arr=players.slice();
+ for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}
+ previewOrder=arr.map(name);
+ let n=1;while(n<arr.length)n*=2;
+ const padded=arr.slice();while(padded.length<n)padded.push(null);
+ const pairs=[];for(let i=0;i<n;i+=2)pairs.push([padded[i],padded[i+1]]);
+ $("#previewList").innerHTML=pairs.map(pr=>{
+   const a=pr[0]?name(pr[0]):null,b=pr[1]?name(pr[1]):null;
+   if(a&&b)return `<div class="preview-pair"><span>${esc(a)}</span><b>VS</b><span>${esc(b)}</span></div>`;
+   return `<div class="preview-pair"><span>${esc(a||b)}</span><b>BYE</b><span class="tbd">langsung maju ronde ini</span></div>`;
+ }).join("");
+ $("#previewBox").hidden=false;
+}
+$("#previewBtn").onclick=()=>generatePreview();
+$("#reshuffleBtn").onclick=()=>generatePreview();
+$("#cancelPreviewBtn").onclick=()=>{$("#previewBox").hidden=true;previewOrder=null};
+$("#confirmStartBtn").onclick=async()=>{
+ if(!previewOrder){$("#adminMsg").textContent="Preview dulu sebelum mulai.";return}
+ if(!confirm("Mulai turnamen dengan susunan bracket hasil preview ini?"))return;
+ try{await api("start",{order:previewOrder});$("#previewBox").hidden=true;previewOrder=null;$("#adminMsg").textContent="Bracket dimulai sesuai hasil preview.";load(true)}
+ catch(e){$("#adminMsg").textContent=e.message}
+}
+$("#togglePublicPreview").onclick=()=>{
+ const w=$("#publicPreviewWrap"),show=w.hidden;
+ w.hidden=!show;$("#togglePublicPreview").textContent=show?"SEMBUNYIKAN":"TAMPILKAN";
+ if(show)$("#publicPreviewFrame").src="/?t="+Date.now();
+}
+$("#refreshPublicPreview").onclick=()=>{$("#publicPreviewFrame").src="/?t="+Date.now()};
+$("#resetBtn").onclick=async()=>{if(!confirm("RESET SEMUA DATA TURNAMEN?"))return;try{await api("reset");previewOrder=null;$("#previewBox").hidden=true;$("#adminMsg").textContent="Tournament di-reset.";load(true)}catch(e){$("#adminMsg").textContent=e.message}}
 $("#logoutBtn").onclick=async()=>{await api("logout");location.reload()};
 load(true);setInterval(()=>{if(state)load(false)},2000);

@@ -27,8 +27,17 @@
       <section class="glass section">
         <div class="section-title"><h2>TOURNAMENT CONTROL</h2><button class="danger" id="logoutBtn">LOGOUT</button></div>
         <div class="controls">
-          <button id="startBtn">START / RANDOMIZE BRACKET</button>
+          <button id="previewBtn">🎲 PREVIEW / ACAK BRACKET</button>
           <button class="danger" id="resetBtn">RESET TOURNAMENT</button>
+        </div>
+        <div id="previewBox" class="preview-box" hidden>
+          <div class="section-title" style="margin:14px 0 9px"><h2 style="font-size:12px">PREVIEW BRACKET — ROUND 1</h2><span>BELUM DISIMPAN, MASIH BISA DIACAK ULANG</span></div>
+          <div id="previewList" class="preview-list"></div>
+          <div class="controls" style="margin-top:11px">
+            <button id="reshuffleBtn">🔁 KOCOK ULANG</button>
+            <button id="confirmStartBtn">✅ GUNAKAN BRACKET INI & MULAI</button>
+            <button class="danger" id="cancelPreviewBtn">BATAL</button>
+          </div>
         </div>
         <p id="adminMsg" class="msg"></p>
       </section>
@@ -53,6 +62,14 @@
       <section class="glass section">
         <div class="section-title"><h2>CHOOSE WINNER</h2><span>KLIK NAMA PEMENANG</span></div>
         <div id="adminBracket" class="bracket-wrap"></div>
+      </section>
+
+      <section class="glass section">
+        <div class="section-title"><h2>PREVIEW TAMPILAN PUBLIK</h2><button id="togglePublicPreview">TAMPILKAN</button></div>
+        <div id="publicPreviewWrap" hidden>
+          <div class="controls" style="margin-bottom:9px"><button id="refreshPublicPreview">🔄 REFRESH PREVIEW</button></div>
+          <iframe id="publicPreviewFrame" class="public-preview-frame" src="/"></iframe>
+        </div>
       </section>
     </section>
   </main>

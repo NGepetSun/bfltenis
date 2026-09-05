@@ -11,9 +11,19 @@ function courtSignature(live){
    return [m.id,m.status,p1,p2,(m.players||[]).map(name).join(",")].join(":");
  }).join("|");
 }
+function embedSrc(url){
+ if(!url)return null;
+ if(/^https:\/\/www\.youtube\.com\/embed\/live_stream\?channel=/i.test(url)){
+   const sep=url.includes("?")?"&":"?";
+   return url+sep+"autoplay=1&mute=1&playsinline=1&rel=0";
+ }
+ return yt(url);
+}
 function videoSlot(url,playerObj,fallbackLabel){
- const u=yt(url),pname=name(playerObj)||fallbackLabel;
- const link=String(url||"").trim(),href=/^https?:\/\//i.test(link)?link:"https://"+link;
+ const u=embedSrc(url),pname=name(playerObj)||fallbackLabel;
+ const chMatch=String(url||"").match(/embed\/live_stream\?channel=([\w-]+)/);
+ const link=chMatch?("https://www.youtube.com/channel/"+chMatch[1]+"/live"):String(url||"").trim();
+ const href=link&&!/^https?:\/\//i.test(link)?"https://"+link:link;
  return `<div class="video-slot">
    <div class="video-frame">${u?`<iframe src="${u}" title="BFL Tennis Live - ${esc(pname)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`:'<div class="empty">Live belum diatur admin.</div>'}</div>
    <div class="video-name">${esc(pname)}</div>
@@ -21,26 +31,29 @@ function videoSlot(url,playerObj,fallbackLabel){
  </div>`;
 }
 function court(state){
- const live=[...(state.rounds||[]).flatMap(r=>r.matches||[]),state.thirdPlace].filter(x=>x&&x.status==="live");
+ const all=[...(state.rounds||[]).flatMap(r=>r.matches||[]),state.thirdPlace];
+ const live=all.filter(x=>x&&x.status==="live"); // sudah urut: Round1 atas→bawah, lanjut Round2, dst
  const el=$("#court");
  if(!live.length){
    if(lastCourtSig!=="")el.innerHTML='<div class="empty">Belum ada live streaming.<br>Admin dapat menambahkan link saat pertandingan berjalan.</div>';
    lastCourtSig="";
    return;
  }
- const sig=courtSignature(live);
+ const shown=live.slice(0,2),others=live.length-shown.length;
+ const sig=courtSignature(shown)+"|others:"+others;
  if(sig===lastCourtSig)return; // data tidak berubah -> jangan render ulang (biar iframe tidak reload / blank)
  lastCourtSig=sig;
- el.innerHTML=live.map(m=>{
+ const cards=shown.map((m,i)=>{
    const players=m.players||[];
    const p1=m.liveYoutube1||m.liveYoutube||"",p2=m.liveYoutube2||"";
    const title=players.map(name).join("  vs  "),safe=String(m.id).replace(/[^a-zA-Z0-9_-]/g,"");
    const slots=[videoSlot(p1,players[0],"Pemain 1"),videoSlot(p2,players[1],"Pemain 2")];
    return `<article class="video-card" data-court="${safe}">
-     <div class="video-card-head"><span class="live-dot">● LIVE</span><span class="match-name">${esc(title)}</span></div>
+     <div class="video-card-head"><span class="live-dot">● LIVE</span><span class="match-name">${shown.length>1?"LAPANGAN "+(i+1)+" — ":""}${esc(title)}</span></div>
      <div class="video-grid dual">${slots.join("")}</div>
    </article>`;
  }).join("");
+ el.innerHTML=cards+(others>0?`<div class="live-queue-note">+${others} match lain juga sedang live, menunggu giliran ditampilkan di sini.</div>`:"");
 }
 function podium(s){$("#podium").innerHTML=[["🥇","JUARA 1",s.podium?.first,"Rp 500.000"],["🥈","JUARA 2",s.podium?.second,"Rp 300.000"],["🥉","JUARA 3",s.podium?.third,"Rp 200.000"]].map(x=>`<div class="place"><b>${x[0]}</b><span>${x[1]}</span><strong>${name(x[2])}</strong><small>${x[3]}</small></div>`).join("")}
 async function load(){try{const r=await fetch("/api/index?action=state",{cache:"no-store"});if(!r.ok)throw Error("API "+r.status);const d=await r.json();const live=[...(d.rounds||[]).flatMap(r=>r.matches||[]),d.thirdPlace].some(x=>x&&x.status==="live");$("#statusText").textContent=d.status==="completed"?"COMPLETED":live?"● LIVE":"WAITING";$("#topStatus").textContent=live?"● LIVE":"● "+(d.status||"OFFLINE").toUpperCase();$("#topStatus").classList.toggle("live",live);$("#updated").textContent=new Date().toLocaleTimeString();court(d);bracket(d);podium(d)}catch(e){$("#statusText").textContent="OFFLINE";$("#topStatus").textContent="● OFFLINE";$("#topStatus").classList.remove("live")}}
